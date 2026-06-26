@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 
 const DRIVER_START = "09:00";
 const DRIVER_END = "18:00";
@@ -202,15 +203,18 @@ export default function BookingPage() {
         {/* Header */}
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#ff6900" }}>
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
-            </div>
+            <Image
+              src="/xiaomi-logo.png"
+              alt="Xiaomi Malaysia"
+              width={32}
+              height={32}
+              className="rounded-lg"
+              priority
+            />
             <span className="text-xs font-semibold tracking-widest uppercase text-gray-400">Xiaomi Malaysia</span>
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-1">Driver Booking</h1>
-          <p className="text-gray-500 text-sm">Available daily, 9:00 AM – 7:00 PM</p>
+          <p className="text-gray-500 text-sm">Available daily, 9:00 AM – 6:00 PM</p>
         </div>
 
         {/* Driver info banner */}

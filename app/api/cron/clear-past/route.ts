@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readBookings, writeBookings } from "@/lib/bookings";
+import { readBookings, writeBookings, StorageNotConfiguredError } from "@/lib/bookings";
 
 export const dynamic = "force-dynamic";
 
@@ -9,14 +9,22 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const bookings = await readBookings();
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  try {
+    const bookings = await readBookings();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-  const kept = bookings.filter((b) => new Date(b.date) >= today);
-  const removed = bookings.length - kept.length;
+    const kept = bookings.filter((b) => new Date(b.date) >= today);
+    const removed = bookings.length - kept.length;
 
-  await writeBookings(kept);
+    await writeBookings(kept);
 
-  return NextResponse.json({ success: true, removed, kept: kept.length, ranAt: new Date().toISOString() });
+    return NextResponse.json({ success: true, removed, kept: kept.length, ranAt: new Date().toISOString() });
+  } catch (err) {
+    console.error(err);
+    if (err instanceof StorageNotConfiguredError) {
+      return NextResponse.json({ error: err.message }, { status: 503 });
+    }
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  }
 }

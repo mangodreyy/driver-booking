@@ -4,6 +4,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Driver Booking",
   description: "Book the company driver",
+  icons: {
+    icon: "/xiaomi-logo.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

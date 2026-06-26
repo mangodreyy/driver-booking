@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readBookings, writeBookings, hasClash, Booking } from "@/lib/bookings";
+import { readBookings, writeBookings, hasClash, Booking, StorageNotConfiguredError } from "@/lib/bookings";
 import { randomUUID } from "crypto";
 
 function fmt12(time24: string): string {
@@ -35,8 +35,16 @@ function buildWhatsAppMessage(b: Booking): string {
 }
 
 export async function GET() {
-  const bookings = await readBookings();
-  return NextResponse.json(bookings);
+  try {
+    const bookings = await readBookings();
+    return NextResponse.json(bookings);
+  } catch (err) {
+    console.error(err);
+    if (err instanceof StorageNotConfiguredError) {
+      return NextResponse.json({ error: err.message }, { status: 503 });
+    }
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -86,6 +94,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, booking: newBooking, waLink });
   } catch (err) {
     console.error(err);
+    if (err instanceof StorageNotConfiguredError) {
+      return NextResponse.json({ error: err.message }, { status: 503 });
+    }
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

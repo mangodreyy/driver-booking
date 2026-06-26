@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readBookings, hasClash } from "@/lib/bookings";
+import { readBookings, hasClash, StorageNotConfiguredError } from "@/lib/bookings";
 
 export async function POST(req: NextRequest) {
   try {
@@ -24,6 +24,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ available: true });
   } catch (err) {
     console.error(err);
+    if (err instanceof StorageNotConfiguredError) {
+      return NextResponse.json({ error: err.message, available: false }, { status: 503 });
+    }
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

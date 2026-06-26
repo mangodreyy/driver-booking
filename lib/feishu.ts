@@ -5,7 +5,9 @@ const APP_ID = process.env.FEISHU_APP_ID;
 const APP_SECRET = process.env.FEISHU_APP_SECRET;
 const FEISHU_EMAIL = process.env.FEISHU_EMAIL || "v-ciaoshileong@xiaomi.com";
 
-let tenantAccessToken: string | null = null;
+// let tenantAccessToken: string | null = null;
+// let tokenExpiry: number = 0;
+let tenantAccessToken: string = "";
 let tokenExpiry: number = 0;
 
 async function getTenantAccessToken(): Promise<string> {
@@ -32,8 +34,10 @@ async function getTenantAccessToken(): Promise<string> {
       throw new Error("Failed to get FeiShu access token");
     }
 
-    tenantAccessToken = data.tenant_access_token;
-    tokenExpiry = Date.now() + (data.expire - 600) * 1000; // Refresh 10 min before expiry
+    // tenantAccessToken = data.tenant_access_token;
+    // tokenExpiry = Date.now() + (data.expire - 600) * 1000; // Refresh 10 min before expiry
+    tenantAccessToken = data.tenant_access_token || "";
+    tokenExpiry = Date.now() + ((data.expire || 0) - 600) * 1000;
 
     return tenantAccessToken;
   } catch (error) {

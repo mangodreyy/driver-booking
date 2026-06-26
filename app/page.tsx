@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 
 const DRIVER_START = "09:00";
-const DRIVER_END = "19:00";
+const DRIVER_END = "18:00";
 const PICKUP_POINT_DEFAULT = "Bangsar South Office Lobby";
 const DRIVER_NAME = "Azlan";
 const DRIVER_PHONE = "+60 11-3766 3532";

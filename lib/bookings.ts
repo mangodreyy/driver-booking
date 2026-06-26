@@ -134,18 +134,44 @@ export interface Booking {
 const KEY = "bookings";
 const DATA_FILE = path.join(process.cwd(), "data", "bookings.json");
 
-// Initialize Redis client
-const redis = process.env.UPSTASH_REDIS_REST_URL
-  ? new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN || "",
-    })
-  : null;
+// Initialize Redis client using REDIS_URL or REST API
+let redis: Redis | null = null;
+
+function initializeRedis() {
+  if (redis) return redis;
+
+  try {
+    // Method 1: Using REDIS_URL (standard Redis connection string)
+    if (process.env.REDIS_URL) {
+      redis = new Redis({
+        url: process.env.REDIS_URL,
+      });
+      return redis;
+    }
+
+    // Method 2: Using Upstash REST API (UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN)
+    if (
+      process.env.UPSTASH_REDIS_REST_URL &&
+      process.env.UPSTASH_REDIS_REST_TOKEN
+    ) {
+      redis = new Redis({
+        url: process.env.UPSTASH_REDIS_REST_URL,
+        token: process.env.UPSTASH_REDIS_REST_TOKEN,
+      });
+      return redis;
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Failed to initialize Redis:", error);
+    return null;
+  }
+}
 
 export class StorageNotConfiguredError extends Error {
   constructor() {
     super(
-      "Booking storage is not set up. In Vercel: Project → Storage → Add → Redis (Upstash) → Connect → Redeploy. Environment variables UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be set."
+      "Booking storage is not set up. Set REDIS_URL or UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN environment variables."
     );
     this.name = "StorageNotConfiguredError";
   }
@@ -153,8 +179,9 @@ export class StorageNotConfiguredError extends Error {
 
 function hasRedisConfig(): boolean {
   return Boolean(
-    process.env.UPSTASH_REDIS_REST_URL &&
-      process.env.UPSTASH_REDIS_REST_TOKEN
+    process.env.REDIS_URL ||
+      (process.env.UPSTASH_REDIS_REST_URL &&
+        process.env.UPSTASH_REDIS_REST_TOKEN)
   );
 }
 
@@ -177,10 +204,13 @@ async function writeToFile(bookings: Booking[]): Promise<void> {
 }
 
 export async function readBookings(): Promise<Booking[]> {
-  if (hasRedisConfig() && redis) {
+  if (hasRedisConfig()) {
     try {
-      const data = await redis.get<Booking[]>(KEY);
-      return data ?? [];
+      const redisClient = initializeRedis();
+      if (redisClient) {
+        const data = await redisClient.get<Booking[]>(KEY);
+        return data ?? [];
+      }
     } catch (error) {
       console.error("Redis read error:", error);
       // Fallback to file if Redis fails
@@ -196,10 +226,13 @@ export async function readBookings(): Promise<Booking[]> {
 }
 
 export async function writeBookings(bookings: Booking[]): Promise<void> {
-  if (hasRedisConfig() && redis) {
+  if (hasRedisConfig()) {
     try {
-      await redis.set(KEY, bookings);
-      return;
+      const redisClient = initializeRedis();
+      if (redisClient) {
+        await redisClient.set(KEY, bookings);
+        return;
+      }
     } catch (error) {
       console.error("Redis write error:", error);
       // Fallback to file if Redis fails

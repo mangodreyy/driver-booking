@@ -1,5 +1,5 @@
 // lib/feishu.ts
-import { Booking } from "lib/bookings.ts";
+import { Booking } from "./bookings";
 
 const APP_ID = process.env.FEISHU_APP_ID;
 const APP_SECRET = process.env.FEISHU_APP_SECRET;

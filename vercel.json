@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/clear-past",
+      "schedule": "0 0 * * 1"
+    }
+  ]
+}

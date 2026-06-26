@@ -115,7 +115,7 @@
 
 import { promises as fs } from "fs";
 import path from "path";
-import { getRedis } from "./redis"; // Adjust path if needed
+import { getRedis } from "lib/redis.ts"; // Adjust path if needed
 
 export interface Booking {
   id: string;

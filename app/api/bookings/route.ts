@@ -10,13 +10,13 @@ function fmt12(time24: string): string {
 }
 
 function buildWhatsAppMessage(b: Booking): string {
-  const typeLabel = b.type === "drop_off" ? "Drop Off 🚗" : "Round Trip 🔄";
+  const typeLabel = b.type === "drop_off" ? "Drop Off" : "Round Trip";
   const getDayName = (dateStr: string) => {
   const date = new Date(dateStr + 'T00:00:00');
   return date.toLocaleDateString('en-US', { weekday: 'long' });
 };
   const lines = [
-    `Date: ${b.date}`,
+    `Date: *${b.date} (${getDayName(b.date)})*`,
     `Type: ${typeLabel}`,
     ``,
     `PIC: ${b.picName}`,

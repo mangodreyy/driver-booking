@@ -113,9 +113,9 @@
 //   return { clashes: false };
 // }
 
-import redis from "./redis";
 import { promises as fs } from "fs";
 import path from "path";
+import { getRedis } from "./redis"; // Adjust path if needed
 
 export interface Booking {
   id: string;
@@ -141,7 +141,7 @@ function hasRedisConfig(): boolean {
 async function readFromFile(): Promise<Booking[]> {
   try {
     const raw = await fs.readFile(DATA_FILE, "utf-8");
-    return JSON.parse(raw);
+    return JSON.parse(raw) as Booking[];
   } catch {
     return [];
   }
@@ -154,19 +154,38 @@ async function writeToFile(bookings: Booking[]): Promise<void> {
 
 export async function readBookings(): Promise<Booking[]> {
   if (hasRedisConfig()) {
-    const data = await redis.get(KEY);
-    return data ? JSON.parse(data) : [];
+    try {
+      const redis = await getRedis();
+      const data = await redis.get(KEY);
+
+      if (!data) {
+        return [];
+      }
+
+      return JSON.parse(data) as Booking[];
+    } catch (error) {
+      console.error("Redis read error:", error);
+      return [];
+    }
   }
 
+  // Local development fallback
   return readFromFile();
 }
 
 export async function writeBookings(bookings: Booking[]): Promise<void> {
   if (hasRedisConfig()) {
-    await redis.set(KEY, JSON.stringify(bookings));
-    return;
+    try {
+      const redis = await getRedis();
+      await redis.set(KEY, JSON.stringify(bookings));
+      return;
+    } catch (error) {
+      console.error("Redis write error:", error);
+      throw error;
+    }
   }
 
+  // Local development fallback
   await writeToFile(bookings);
 }
 
@@ -205,9 +224,14 @@ export function hasClash(
       proposed.start < existing.end &&
       existing.start < proposed.end
     ) {
-      return { clashes: true, clashWith: b };
+      return {
+        clashes: true,
+        clashWith: b,
+      };
     }
   }
 
-  return { clashes: false };
+  return {
+    clashes: false,
+  };
 }

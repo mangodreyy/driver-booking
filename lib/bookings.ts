@@ -113,7 +113,7 @@
 //   return { clashes: false };
 // }
 
-import { Redis } from "@upstash/redis";
+import Redis from "ioredis";
 import { promises as fs } from "fs";
 import path from "path";
 
@@ -134,30 +134,16 @@ export interface Booking {
 const KEY = "bookings";
 const DATA_FILE = path.join(process.cwd(), "data", "bookings.json");
 
-// Initialize Redis client using REDIS_URL or REST API
+// Initialize Redis client using REDIS_URL
 let redis: Redis | null = null;
 
 function initializeRedis() {
   if (redis) return redis;
 
   try {
-    // Method 1: Using REDIS_URL (standard Redis connection string)
+    // Using REDIS_URL (standard Redis connection string)
     if (process.env.REDIS_URL) {
-      redis = new Redis({
-        url: process.env.REDIS_URL,
-      });
-      return redis;
-    }
-
-    // Method 2: Using Upstash REST API (UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN)
-    if (
-      process.env.UPSTASH_REDIS_REST_URL &&
-      process.env.UPSTASH_REDIS_REST_TOKEN
-    ) {
-      redis = new Redis({
-        url: process.env.UPSTASH_REDIS_REST_URL,
-        token: process.env.UPSTASH_REDIS_REST_TOKEN,
-      });
+      redis = new Redis(process.env.REDIS_URL);
       return redis;
     }
 
@@ -171,18 +157,14 @@ function initializeRedis() {
 export class StorageNotConfiguredError extends Error {
   constructor() {
     super(
-      "Booking storage is not set up. Set REDIS_URL or UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN environment variables."
+      "Booking storage is not set up. Set REDIS_URL environment variable."
     );
     this.name = "StorageNotConfiguredError";
   }
 }
 
 function hasRedisConfig(): boolean {
-  return Boolean(
-    process.env.REDIS_URL ||
-      (process.env.UPSTASH_REDIS_REST_URL &&
-        process.env.UPSTASH_REDIS_REST_TOKEN)
-  );
+  return Boolean(process.env.REDIS_URL);
 }
 
 function isVercel(): boolean {
@@ -208,8 +190,8 @@ export async function readBookings(): Promise<Booking[]> {
     try {
       const redisClient = initializeRedis();
       if (redisClient) {
-        const data = await redisClient.get<Booking[]>(KEY);
-        return data ?? [];
+        const data = await redisClient.get(KEY);
+        return data ? JSON.parse(data) : [];
       }
     } catch (error) {
       console.error("Redis read error:", error);
@@ -230,7 +212,7 @@ export async function writeBookings(bookings: Booking[]): Promise<void> {
     try {
       const redisClient = initializeRedis();
       if (redisClient) {
-        await redisClient.set(KEY, bookings);
+        await redisClient.set(KEY, JSON.stringify(bookings));
         return;
       }
     } catch (error) {

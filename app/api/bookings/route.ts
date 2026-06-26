@@ -35,7 +35,7 @@ function buildWhatsAppMessage(b: Booking): string {
 }
 
 export async function GET() {
-  const bookings = readBookings();
+  const bookings = await readBookings();
   return NextResponse.json(bookings);
 }
 
@@ -44,7 +44,6 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { date, type, picName, picContact, totalGuests, pickupTime, endTime, pickupPoint, dropOffPoint } = body;
 
-    // Validate required fields
     if (!date || !type || !picName || !picContact || !totalGuests || !pickupTime || !pickupPoint || !dropOffPoint) {
       return NextResponse.json({ error: "All fields are required." }, { status: 400 });
     }
@@ -52,9 +51,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "End time is required for round trips." }, { status: 400 });
     }
 
-    const bookings = readBookings();
+    const bookings = await readBookings();
 
-    // Final clash check (race condition protection)
     const { clashes, clashWith } = hasClash(date, pickupTime, endTime, type, bookings);
     if (clashes) {
       return NextResponse.json({
@@ -79,9 +77,8 @@ export async function POST(req: NextRequest) {
     };
 
     bookings.push(newBooking);
-    writeBookings(bookings);
+    await writeBookings(bookings);
 
-    // Build WhatsApp deep link
     const waNumber = process.env.WHATSAPP_NUMBER || "";
     const message = buildWhatsAppMessage(newBooking);
     const waLink = `https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`;

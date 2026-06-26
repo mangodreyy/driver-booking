@@ -9,20 +9,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
 
-    const bookings = readBookings();
+    const bookings = await readBookings();
     const { clashes, clashWith } = hasClash(date, pickupTime, endTime, type, bookings);
 
     if (clashes) {
       return NextResponse.json({
         available: false,
-        message: `The driver is already booked from ${clashWith?.pickupTime}${
+        message: `Driver is already booked from ${clashWith?.pickupTime}${
           clashWith?.endTime ? ` to ${clashWith.endTime}` : ""
         } on this date. Please choose a different time.`,
       });
     }
 
     return NextResponse.json({ available: true });
-  } catch {
+  } catch (err) {
+    console.error(err);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

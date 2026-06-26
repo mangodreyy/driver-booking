@@ -1,48 +1,35 @@
-import fs from "fs";
-import path from "path";
+import { kv } from "@vercel/kv";
 
 export interface Booking {
   id: string;
-  date: string; // YYYY-MM-DD
+  date: string;
   type: "drop_off" | "round_trip";
   picName: string;
   picContact: string;
   totalGuests: number;
-  pickupTime: string; // HH:MM (24h)
-  endTime?: string; // HH:MM (24h) — round trip only
+  pickupTime: string;
+  endTime?: string;
   pickupPoint: string;
   dropOffPoint: string;
   createdAt: string;
 }
 
-const DATA_FILE = path.join(process.cwd(), "data", "bookings.json");
+const KEY = "bookings";
 
-function ensureFile() {
-  const dir = path.dirname(DATA_FILE);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, "[]");
+export async function readBookings(): Promise<Booking[]> {
+  const data = await kv.get<Booking[]>(KEY);
+  return data ?? [];
 }
 
-export function readBookings(): Booking[] {
-  ensureFile();
-  return JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
+export async function writeBookings(bookings: Booking[]): Promise<void> {
+  await kv.set(KEY, bookings);
 }
 
-export function writeBookings(bookings: Booking[]) {
-  ensureFile();
-  fs.writeFileSync(DATA_FILE, JSON.stringify(bookings, null, 2));
-}
-
-/** Convert "HH:MM" to minutes since midnight */
 function toMinutes(t: string): number {
   const [h, m] = t.split(":").map(Number);
   return h * 60 + m;
 }
 
-/**
- * Check if a proposed booking clashes with any existing booking on the same date.
- * Driver is busy from pickupTime until endTime (round trip) or pickupTime+1h (drop off).
- */
 export function hasClash(
   date: string,
   pickupTime: string,
@@ -52,7 +39,6 @@ export function hasClash(
 ): { clashes: boolean; clashWith?: Booking } {
   const proposed = {
     start: toMinutes(pickupTime),
-    // drop off: assume 1h block; round trip: until endTime
     end:
       type === "round_trip" && endTime
         ? toMinutes(endTime)
@@ -69,7 +55,6 @@ export function hasClash(
           ? toMinutes(b.endTime)
           : toMinutes(b.pickupTime) + 60,
     };
-    // Overlap check: two intervals overlap if start1 < end2 && start2 < end1
     if (proposed.start < existing.end && existing.start < proposed.end) {
       return { clashes: true, clashWith: b };
     }

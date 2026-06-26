@@ -11,23 +11,25 @@ function fmt12(time24: string): string {
 
 function buildWhatsAppMessage(b: Booking): string {
   const typeLabel = b.type === "drop_off" ? "Drop Off 🚗" : "Round Trip 🔄";
+  const getDayName = (dateStr: string) => {
+  const date = new Date(dateStr + 'T00:00:00');
+  return date.toLocaleDateString('en-US', { weekday: 'long' });
+};
   const lines = [
-    `🗓 *New Driver Booking*`,
+    `Date: ${b.date}`,
+    `Type: ${typeLabel}`,
     ``,
-    `📅 Date: ${b.date}`,
-    `🚦 Type: ${typeLabel}`,
+    `PIC: ${b.picName}`,
+    `Contact: ${b.picContact}`,
+    `Total Guests: ${b.totalGuests}`,
     ``,
-    `👤 PIC: ${b.picName}`,
-    `📱 Contact: ${b.picContact}`,
-    `👥 Total Guests: ${b.totalGuests}`,
-    ``,
-    `🕐 Pick-up Time: ${fmt12(b.pickupTime)}`,
+    `Pick-up Time: ${fmt12(b.pickupTime)}`,
     b.endTime ? `🕐 Return Time: ${fmt12(b.endTime)}` : null,
     ``,
-    `📍 Pick-up Point: ${b.pickupPoint}`,
-    `📍 Drop-off Point: ${b.dropOffPoint}`,
+    `Pick-up Point: ${b.pickupPoint}`,
+    `Drop-off Point: ${b.dropOffPoint}`,
     ``,
-    `🆔 Booking ID: ${b.id.slice(0, 8).toUpperCase()}`,
+    `Booking ID: ${b.id.slice(0, 8).toUpperCase()}`,
   ]
     .filter((l) => l !== null)
     .join("\n");

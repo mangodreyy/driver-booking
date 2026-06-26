@@ -38,30 +38,35 @@ export default function AdminPage() {
 
   useEffect(() => { load(); }, []);
 
-  const filtered = filter
-    ? bookings.filter((b) => b.date === filter)
-    : bookings;
+  const filtered = filter ? bookings.filter((b) => b.date === filter) : bookings;
 
   return (
-    <div className="min-h-screen bg-gray-50 py-10 px-4">
+    <div className="min-h-screen py-10 px-4" style={{ background: "#fff7f0" }}>
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">📋 Admin — All Bookings</h1>
-            <p className="text-gray-500 text-sm">{bookings.length} total booking{bookings.length !== 1 ? "s" : ""}</p>
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-6 h-6 rounded flex items-center justify-center" style={{ background: "#ff6900" }}>
+                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+              </div>
+              <h1 className="text-xl font-bold text-gray-900">All Bookings</h1>
+            </div>
+            <p className="text-gray-400 text-sm">{bookings.length} total booking{bookings.length !== 1 ? "s" : ""}</p>
           </div>
-          <a href="/" className="text-sm text-blue-600 hover:underline">← Back to form</a>
+          <a href="/" className="text-sm font-medium px-3 py-1.5 rounded-lg" style={{ color: "#ff6900", background: "#fff0e0" }}>← New Booking</a>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4 flex items-center gap-3">
+        <div className="bg-white rounded-xl border p-4 mb-4 flex items-center gap-3" style={{ borderColor: "#ffe0c0" }}>
           <label className="text-sm font-medium text-gray-700">Filter by date:</label>
           <input
             type="date"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
           />
-          {filter && <button onClick={() => setFilter("")} className="text-sm text-blue-600 hover:underline">Clear</button>}
+          {filter && <button onClick={() => setFilter("")} className="text-sm font-medium" style={{ color: "#ff6900" }}>Clear</button>}
         </div>
 
         {loading ? (
@@ -71,13 +76,16 @@ export default function AdminPage() {
         ) : (
           <div className="space-y-3">
             {filtered.map((b) => (
-              <div key={b.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+              <div key={b.id} className="bg-white rounded-xl border shadow-sm p-5" style={{ borderColor: "#ffe8d0" }}>
                 <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${b.type === "round_trip" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full"
+                      style={b.type === "round_trip"
+                        ? { background: "#f3e8ff", color: "#7c3aed" }
+                        : { background: "#fff0e0", color: "#ff6900" }}>
                       {b.type === "round_trip" ? "🔄 Round Trip" : "🚗 Drop Off"}
                     </span>
-                    <span className="ml-2 text-xs text-gray-400">#{b.id.slice(0, 8).toUpperCase()}</span>
+                    <span className="text-xs text-gray-400 font-mono">#{b.id.slice(0, 8).toUpperCase()}</span>
                   </div>
                   <span className="text-sm font-semibold text-gray-700">{b.date}</span>
                 </div>
@@ -85,7 +93,7 @@ export default function AdminPage() {
                   <div><span className="text-gray-400">PIC:</span> <span className="font-medium">{b.picName}</span></div>
                   <div><span className="text-gray-400">Contact:</span> {b.picContact}</div>
                   <div><span className="text-gray-400">Guests:</span> {b.totalGuests}</div>
-                  <div><span className="text-gray-400">Pick-up:</span> {fmt12(b.pickupTime)}{b.endTime ? ` → ${fmt12(b.endTime)}` : ""}</div>
+                  <div><span className="text-gray-400">Time:</span> {fmt12(b.pickupTime)}{b.endTime ? ` → ${fmt12(b.endTime)}` : ""}</div>
                   <div className="col-span-2"><span className="text-gray-400">From:</span> {b.pickupPoint}</div>
                   <div className="col-span-2"><span className="text-gray-400">To:</span> {b.dropOffPoint}</div>
                 </div>

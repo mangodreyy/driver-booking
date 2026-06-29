@@ -1,142 +1,146 @@
-// lib/feishu.ts
 import { Booking } from "@/lib/bookings";
 
-const APP_ID = process.env.FEISHU_APP_ID;
-const APP_SECRET = process.env.FEISHU_APP_SECRET;
-const FEISHU_EMAIL = process.env.FEISHU_EMAIL || "v-ciaoshileong@xiaomi.com";
+const WEBHOOK_URL = process.env.FEISHU_WEBHOOK_URL || "";
 
-// let tenantAccessToken: string | null = null;
-// let tokenExpiry: number = 0;
-let tenantAccessToken: string = "";
-let tokenExpiry: number = 0;
-
-async function getTenantAccessToken(): Promise<string> {
-  // Return cached token if still valid
-  if (tenantAccessToken && Date.now() < tokenExpiry) {
-    return tenantAccessToken;
-  }
-
-  try {
-    const response = await fetch("https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        app_id: APP_ID,
-        app_secret: APP_SECRET,
-      }),
-    });
-
-    const data = await response.json();
-
-    if (!data.tenant_access_token) {
-      throw new Error("Failed to get FeiShu access token");
-    }
-
-    // tenantAccessToken = data.tenant_access_token;
-    // tokenExpiry = Date.now() + (data.expire - 600) * 1000; // Refresh 10 min before expiry
-    tenantAccessToken = data.tenant_access_token || "";
-    tokenExpiry = Date.now() + ((data.expire || 0) - 600) * 1000;
-
-    return tenantAccessToken;
-  } catch (error) {
-    console.error("FeiShu token error:", error);
-    throw error;
-  }
+function getDayName(dateStr: string): string {
+  return new Date(dateStr + "T00:00:00").toLocaleDateString("en-MY", { weekday: "long" });
 }
 
-async function getUserIdByEmail(email: string): Promise<string> {
-  const token = await getTenantAccessToken();
-
-  try {
-    const response = await fetch(
-      `https://open.feishu.cn/open-apis/contact/v3/users/batch_get_id?emails=${email}`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
-
-    const data = await response.json();
-
-    if (!data.data?.user_list || data.data.user_list.length === 0) {
-      throw new Error(`User not found for email: ${email}`);
-    }
-
-    return data.data.user_list[0].user_id;
-  } catch (error) {
-    console.error("FeiShu user lookup error:", error);
-    throw error;
-  }
-}
-
-function formatBookingMessage(booking: Booking): string {
-  const typeLabel = booking.type === "drop_off" ? "Drop Off" : "Round Trip";
-  
-  const lines = [
-    `${booking.date} ${new Date(booking.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' })}`,
-    `Type: ${typeLabel}`,
-    ``,
-    `PIC: ${booking.picName}`,
-    `Contact: ${booking.picContact}`,
-    `Total Guests: ${booking.totalGuests}`,
-    ``,
-    `Pick-up Time: ${booking.pickupTime}`,
-  ];
-
-  if (booking.endTime) {
-    lines.push(`Return Time: ${booking.endTime}`);
-  }
-
-  lines.push(
-    ``,
-    `Pick-up Point: ${booking.pickupPoint}`,
-    `Drop-off Point: ${booking.dropOffPoint}`,
-    ``,
-    `Booking ID: ${booking.id.slice(0, 8).toUpperCase()}`
-  );
-
-  return lines.join("\n");
+function fmt12(t: string): string {
+  const [h, m] = t.split(":").map(Number);
+  const ampm = h >= 12 ? "PM" : "AM";
+  const hour = h % 12 || 12;
+  return `${hour}:${m.toString().padStart(2, "0")} ${ampm}`;
 }
 
 export async function sendBookingNotification(booking: Booking): Promise<void> {
-  if (!APP_ID || !APP_SECRET) {
-    console.warn("FeiShu credentials not configured, skipping notification");
+  if (!WEBHOOK_URL) {
+    console.warn("FEISHU_WEBHOOK_URL not set, skipping notification");
     return;
   }
 
-  try {
-    const userId = await getUserIdByEmail(FEISHU_EMAIL);
-    const token = await getTenantAccessToken();
-    const message = formatBookingMessage(booking);
+  const typeLabel = booking.type === "drop_off" ? "Drop Off 🚗" : "Round Trip 🔄";
+  const timeInfo = booking.type === "round_trip" && booking.endTime
+    ? `${fmt12(booking.pickupTime)} → ${fmt12(booking.endTime)}`
+    : fmt12(booking.pickupTime);
 
-    const response = await fetch("https://open.feishu.cn/open-apis/im/v1/messages", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
+  const card = {
+    msg_type: "interactive",
+    card: {
+      header: {
+        title: {
+          tag: "plain_text",
+          content: "🗓 New Driver Booking",
+        },
+        template: "orange",
       },
-      body: JSON.stringify({
-        receive_id: userId,
-        msg_type: "text",
-        content: JSON.stringify({
-          text: `New Booking!\n\n${message}`,
-        }),
-      }),
+      elements: [
+        {
+          tag: "div",
+          fields: [
+            {
+              is_short: true,
+              text: {
+                tag: "lark_md",
+                content: `**Date**\n${booking.date} (${getDayName(booking.date)})`,
+              },
+            },
+            {
+              is_short: true,
+              text: {
+                tag: "lark_md",
+                content: `**Type**\n${typeLabel}`,
+              },
+            },
+          ],
+        },
+        { tag: "hr" },
+        {
+          tag: "div",
+          fields: [
+            {
+              is_short: true,
+              text: {
+                tag: "lark_md",
+                content: `**PIC**\n${booking.picName}`,
+              },
+            },
+            {
+              is_short: true,
+              text: {
+                tag: "lark_md",
+                content: `**Contact**\n${booking.picContact}`,
+              },
+            },
+          ],
+        },
+        {
+          tag: "div",
+          fields: [
+            {
+              is_short: true,
+              text: {
+                tag: "lark_md",
+                content: `**Total Guests**\n${booking.totalGuests} pax`,
+              },
+            },
+            {
+              is_short: true,
+              text: {
+                tag: "lark_md",
+                content: `**Pick-up Time**\n${timeInfo}`,
+              },
+            },
+          ],
+        },
+        { tag: "hr" },
+        {
+          tag: "div",
+          fields: [
+            {
+              is_short: true,
+              text: {
+                tag: "lark_md",
+                content: `**Pick-up Point**\n${booking.pickupPoint}`,
+              },
+            },
+            {
+              is_short: true,
+              text: {
+                tag: "lark_md",
+                content: `**Drop-off Point**\n${booking.dropOffPoint}`,
+              },
+            },
+          ],
+        },
+        { tag: "hr" },
+        {
+          tag: "note",
+          elements: [
+            {
+              tag: "plain_text",
+              content: `Booking ID: ${booking.id.slice(0, 8).toUpperCase()}  ·  Driver: Azlan (+60 11-3766 3532)`,
+            },
+          ],
+        },
+      ],
+    },
+  };
+
+  try {
+    const res = await fetch(WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(card),
     });
-
-    const data = await response.json();
-
-    if (!data.data?.message_id) {
-      throw new Error("Failed to send FeiShu message");
+    const data = await res.json();
+    if (data.code !== 0) {
+      console.error("Feishu webhook error:", data);
+    } else {
+      console.log("Feishu notification sent successfully");
     }
-
-    console.log("FeiShu notification sent:", data.data.message_id);
   } catch (error) {
-    console.error("Error sending FeiShu notification:", error);
-    // Don't throw - booking should still succeed even if notification fails
+    console.error("Failed to send Feishu notification:", error);
+    // Don't throw — booking should succeed even if notification fails
   }
 }

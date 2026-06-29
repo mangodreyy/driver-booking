@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readBookings, writeBookings, hasClash, Booking, StorageNotConfiguredError } from "@/lib/bookings";
+import { sendBookingNotification } from "@/lib/feishu";
 import { randomUUID } from "crypto";
 
 function fmt12(time24: string): string {
@@ -88,6 +89,9 @@ export async function POST(req: NextRequest) {
 
     bookings.push(newBooking);
     await writeBookings(bookings);
+
+    // Send Feishu/MiWorkPro notification
+    await sendBookingNotification(newBooking);
 
     const waNumber = process.env.WHATSAPP_NUMBER || "";
     const message = buildWhatsAppMessage(newBooking);

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
+import DatePicker from "./components/DatePicker";
 
 const DRIVER_START = "09:00";
 const DRIVER_END = "18:00";
@@ -32,12 +33,6 @@ function generateTimeSlots(start: string, end: string, intervalMin = 30): string
     cur += intervalMin;
   }
   return slots;
-}
-
-function isWeekday(dateStr: string): boolean {
-  const d = new Date(dateStr + "T00:00:00");
-  const day = d.getDay();
-  return day >= 1 && day <= 5;
 }
 
 function getMinPickupTime(dateStr: string): string {
@@ -100,7 +95,7 @@ export default function BookingPage() {
   const [availabilityMsg, setAvailabilityMsg] = useState<{ ok: boolean; msg: string } | null>(null);
   const [success, setSuccess] = useState<{ waLink: string; bookingId: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [dateError, setDateError] = useState<string | null>(null);
+
 
   // Fetch booked ranges whenever date changes
   const fetchBookedRanges = useCallback(async (date: string) => {
@@ -117,19 +112,7 @@ export default function BookingPage() {
     if (form.date) fetchBookedRanges(form.date);
   }, [form.date, fetchBookedRanges]);
 
-  // Validate date selection
-  useEffect(() => {
-    if (!form.date) return;
-    if (!isWeekday(form.date)) {
-      setDateError("Bookings are only available Monday to Friday.");
-      return;
-    }
-    if (form.date < TODAY) {
-      setDateError("Cannot book a past date.");
-      return;
-    }
-    setDateError(null);
-  }, [form.date]);
+
 
   const minPickupTime = getMinPickupTime(form.date);
 
@@ -162,7 +145,6 @@ export default function BookingPage() {
 
   async function checkAvailability() {
     if (!form.date || !form.pickupTime) return;
-    if (dateError) return;
     setChecking(true);
     setAvailabilityMsg(null);
     try {
@@ -196,7 +178,6 @@ export default function BookingPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (dateError) { setError(dateError); return; }
     if (availabilityMsg && !availabilityMsg.ok) {
       setError("Please fix the time clash before submitting.");
       return;
@@ -322,19 +303,11 @@ export default function BookingPage() {
           {/* Date */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Date <span style={{ color: "#ff6900" }}>*</span></label>
-            <input
-              type="date"
-              required
-              min={TODAY}
+            <DatePicker
               value={form.date}
-              onChange={(e) => { set("date", e.target.value); set("pickupTime", ""); set("endTime", ""); }}
-              className={inputClass}
+              min={TODAY}
+              onChange={(d) => { set("date", d); set("pickupTime", ""); set("endTime", ""); }}
             />
-            {dateError && (
-              <p className="text-red-600 text-xs mt-1.5 flex items-center gap-1">
-                <span>⚠️</span> {dateError}
-              </p>
-            )}
           </div>
 
           {/* Trip Type */}
@@ -391,31 +364,24 @@ export default function BookingPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Pick-up Time <span style={{ color: "#ff6900" }}>*</span>
             </label>
-            {!dateError ? (
-              <>
-                <select
-                  required
-                  value={form.pickupTime}
-                  onChange={(e) => { set("pickupTime", e.target.value); set("endTime", ""); }}
-                  className={inputClass}
-                >
-                  <option value="">Select time</option>
-                  {availablePickupSlots.length === 0 ? (
-                    <option disabled>No slots available for this date</option>
-                  ) : (
-                    availablePickupSlots.map((s) => (
-                      <option key={s} value={s}>{fmt12(s)}</option>
-                    ))
-                  )}
-                </select>
-                {availablePickupSlots.length === 0 && (
-                  <p className="text-red-500 text-xs mt-1">All slots are booked for this date.</p>
-                )}
-              </>
-            ) : (
-              <select disabled className={inputClass + " opacity-50 cursor-not-allowed"}>
-                <option>Select a valid date first</option>
-              </select>
+            <select
+              required
+              value={form.pickupTime}
+              onChange={(e) => { set("pickupTime", e.target.value); set("endTime", ""); }}
+              className={inputClass}
+              disabled={!form.date}
+            >
+              <option value="">Select time</option>
+              {availablePickupSlots.length === 0 ? (
+                <option disabled>No slots available for this date</option>
+              ) : (
+                availablePickupSlots.map((s) => (
+                  <option key={s} value={s}>{fmt12(s)}</option>
+                ))
+              )}
+            </select>
+            {form.date && availablePickupSlots.length === 0 && (
+              <p className="text-red-500 text-xs mt-1">All slots are booked for this date.</p>
             )}
           </div>
 
@@ -475,7 +441,7 @@ export default function BookingPage() {
 
           <button
             type="submit"
-            disabled={submitting || !!dateError || (!!availabilityMsg && !availabilityMsg.ok)}
+            disabled={submitting || (!!availabilityMsg && !availabilityMsg.ok)}
             className="w-full text-white font-semibold py-3 rounded-xl transition-all text-sm disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ background: "#ff6900" }}
           >

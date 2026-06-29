@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 
 const DRIVER_START = "09:00";
@@ -9,19 +9,9 @@ const PICKUP_POINT_DEFAULT = "Bangsar South Office Lobby";
 const DRIVER_NAME = "Azlan";
 const DRIVER_PHONE = "+60 11-3766 3532";
 
-function generateTimeSlots(start: string, end: string, intervalMin = 30): string[] {
-  const slots: string[] = [];
-  const [sh, sm] = start.split(":").map(Number);
-  const [eh, em] = end.split(":").map(Number);
-  let cur = sh * 60 + sm;
-  const endMin = eh * 60 + em;
-  while (cur <= endMin) {
-    const h = Math.floor(cur / 60).toString().padStart(2, "0");
-    const m = (cur % 60).toString().padStart(2, "0");
-    slots.push(`${h}:${m}`);
-    cur += intervalMin;
-  }
-  return slots;
+function toMinutes(t: string): number {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
 }
 
 function fmt12(t: string): string {
@@ -31,7 +21,51 @@ function fmt12(t: string): string {
   return `${hour}:${m.toString().padStart(2, "0")} ${ampm}`;
 }
 
+function generateTimeSlots(start: string, end: string, intervalMin = 30): string[] {
+  const slots: string[] = [];
+  let cur = toMinutes(start);
+  const endMin = toMinutes(end);
+  while (cur <= endMin) {
+    const h = Math.floor(cur / 60).toString().padStart(2, "0");
+    const m = (cur % 60).toString().padStart(2, "0");
+    slots.push(`${h}:${m}`);
+    cur += intervalMin;
+  }
+  return slots;
+}
+
+function isWeekday(dateStr: string): boolean {
+  const d = new Date(dateStr + "T00:00:00");
+  const day = d.getDay();
+  return day >= 1 && day <= 5;
+}
+
+function getMinPickupTime(dateStr: string): string {
+  const todayStr = new Date().toISOString().split("T")[0];
+  if (dateStr !== todayStr) return "09:00";
+  const now = new Date();
+  const totalMinutes = now.getHours() * 60 + now.getMinutes();
+  const next30 = Math.ceil(totalMinutes / 30) * 30;
+  const h = Math.floor(next30 / 60).toString().padStart(2, "0");
+  const m = (next30 % 60).toString().padStart(2, "0");
+  const slot = `${h}:${m}`;
+  if (slot < "09:00") return "09:00";
+  return slot;
+}
+
+/** Returns true if a proposed slot [start, start+duration) overlaps any booked range */
+function isSlotBlocked(
+  slotTime: string,
+  bookedRanges: { start: number; end: number }[],
+  slotDurationMin = 30
+): boolean {
+  const slotStart = toMinutes(slotTime);
+  const slotEnd = slotStart + slotDurationMin;
+  return bookedRanges.some((r) => slotStart < r.end && r.start < slotEnd);
+}
+
 const ALL_SLOTS = generateTimeSlots(DRIVER_START, DRIVER_END, 30);
+const TODAY = new Date().toISOString().split("T")[0];
 
 type BookingType = "drop_off" | "round_trip";
 
@@ -47,8 +81,6 @@ interface FormState {
   dropOffPoint: string;
 }
 
-const TODAY = new Date().toISOString().split("T")[0];
-
 export default function BookingPage() {
   const [form, setForm] = useState<FormState>({
     date: TODAY,
@@ -62,15 +94,65 @@ export default function BookingPage() {
     dropOffPoint: "",
   });
 
+  const [bookedRanges, setBookedRanges] = useState<{ start: number; end: number }[]>([]);
   const [checking, setChecking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [availabilityMsg, setAvailabilityMsg] = useState<{ ok: boolean; msg: string } | null>(null);
   const [success, setSuccess] = useState<{ waLink: string; bookingId: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dateError, setDateError] = useState<string | null>(null);
 
-  const endTimeSlots = form.pickupTime
-    ? ALL_SLOTS.filter((s) => s > form.pickupTime)
-    : ALL_SLOTS;
+  // Fetch booked ranges whenever date changes
+  const fetchBookedRanges = useCallback(async (date: string) => {
+    try {
+      const res = await fetch(`/api/check-availability?date=${date}`);
+      const data = await res.json();
+      setBookedRanges(data.ranges || []);
+    } catch {
+      setBookedRanges([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (form.date) fetchBookedRanges(form.date);
+  }, [form.date, fetchBookedRanges]);
+
+  // Validate date selection
+  useEffect(() => {
+    if (!form.date) return;
+    if (!isWeekday(form.date)) {
+      setDateError("Bookings are only available Monday to Friday.");
+      return;
+    }
+    if (form.date < TODAY) {
+      setDateError("Cannot book a past date.");
+      return;
+    }
+    setDateError(null);
+  }, [form.date]);
+
+  const minPickupTime = getMinPickupTime(form.date);
+
+  // Available pickup slots: exclude past times + booked ranges
+  const availablePickupSlots = ALL_SLOTS.filter((s) => {
+    if (s < minPickupTime) return false;
+    if (isSlotBlocked(s, bookedRanges, 30)) return false;
+    return true;
+  });
+
+  // Available end time slots: must be after pickup, exclude booked ranges
+  const availableEndSlots = form.pickupTime
+    ? ALL_SLOTS.filter((s) => {
+        if (s <= form.pickupTime) return false;
+        // For end time, we check if ANY slot between pickup and this end time is blocked
+        const pickupMin = toMinutes(form.pickupTime);
+        const endMin = toMinutes(s);
+        const blocked = bookedRanges.some(
+          (r) => pickupMin < r.end && r.start < endMin
+        );
+        return !blocked;
+      })
+    : [];
 
   function set(field: keyof FormState, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -80,6 +162,7 @@ export default function BookingPage() {
 
   async function checkAvailability() {
     if (!form.date || !form.pickupTime) return;
+    if (dateError) return;
     setChecking(true);
     setAvailabilityMsg(null);
     try {
@@ -104,15 +187,16 @@ export default function BookingPage() {
 
   useEffect(() => {
     if (form.pickupTime && (form.type === "drop_off" || form.endTime)) {
-      const t = setTimeout(checkAvailability, 600);
+      const t = setTimeout(checkAvailability, 500);
       return () => clearTimeout(t);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.pickupTime, form.endTime, form.date, form.type]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (dateError) { setError(dateError); return; }
     if (availabilityMsg && !availabilityMsg.ok) {
       setError("Please fix the time clash before submitting.");
       return;
@@ -143,6 +227,7 @@ export default function BookingPage() {
 
   const inputClass = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent bg-white";
 
+  // ── Success screen ───────────────────────────────────────────────────────
   if (success) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4" style={{ background: "#fff7f0" }}>
@@ -154,9 +239,8 @@ export default function BookingPage() {
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Booking Confirmed!</h2>
           <p className="text-gray-500 mb-1 text-sm">Booking ID: <span className="font-mono font-semibold text-gray-800">#{success.bookingId}</span></p>
-          <p className="text-gray-400 mb-6 text-sm">Slot reserved. Send the details to the driver via WhatsApp.</p>
+          <p className="text-gray-400 mb-6 text-sm">Slot reserved. Send the details to the admin via WhatsApp.</p>
 
-          {/* Driver info card */}
           <div className="rounded-xl p-4 mb-5 text-left flex items-center gap-3" style={{ background: "#fff7f0", border: "1px solid #ffe0c0" }}>
             <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0" style={{ background: "#ff6900" }}>
               {DRIVER_NAME[0]}
@@ -185,6 +269,7 @@ export default function BookingPage() {
               setSuccess(null);
               setForm({ date: TODAY, type: "drop_off", picName: "", picContact: "", totalGuests: "", pickupTime: "", endTime: "", pickupPoint: PICKUP_POINT_DEFAULT, dropOffPoint: "" });
               setAvailabilityMsg(null);
+              fetchBookedRanges(TODAY);
             }}
             className="text-sm hover:underline"
             style={{ color: "#ff6900" }}
@@ -196,6 +281,7 @@ export default function BookingPage() {
     );
   }
 
+  // ── Main form ────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen py-10 px-4" style={{ background: "#fff7f0" }}>
       <div className="max-w-xl mx-auto">
@@ -203,18 +289,11 @@ export default function BookingPage() {
         {/* Header */}
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-3">
-            <Image
-              src="/xiaomi-logo.png"
-              alt="Xiaomi Malaysia"
-              width={32}
-              height={32}
-              className="rounded-lg"
-              priority
-            />
+            <Image src="/xiaomi-logo.png" alt="Xiaomi Malaysia" width={32} height={32} className="rounded-lg" priority />
             <span className="text-xs font-semibold tracking-widest uppercase text-gray-400">Xiaomi Malaysia</span>
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-1">Driver Booking</h1>
-          <p className="text-gray-500 text-sm">Available daily, 9:00 AM – 6:00 PM</p>
+          <p className="text-gray-500 text-sm">Mon – Fri &nbsp;·&nbsp; 9:00 AM – 6:00 PM</p>
         </div>
 
         {/* Driver info banner */}
@@ -227,13 +306,15 @@ export default function BookingPage() {
             <p className="font-semibold text-gray-900 text-sm">{DRIVER_NAME}</p>
             <p className="text-sm text-gray-500">{DRIVER_PHONE}</p>
           </div>
-          <a
-            href={`tel:${DRIVER_PHONE.replace(/\s|-/g, "")}`}
-            className="text-xs font-medium px-3 py-1.5 rounded-lg flex-shrink-0"
-            style={{ background: "#fff0e0", color: "#ff6900" }}
-          >
+          <a href={`tel:${DRIVER_PHONE.replace(/\s|-/g, "")}`} className="text-xs font-medium px-3 py-1.5 rounded-lg flex-shrink-0" style={{ background: "#fff0e0", color: "#ff6900" }}>
             Call
           </a>
+        </div>
+
+        {/* Public holiday notice */}
+        <div className="rounded-xl p-3 mb-5 flex items-start gap-2 text-sm" style={{ background: "#fffbeb", border: "1px solid #fde68a" }}>
+          <span className="mt-0.5">📢</span>
+          <p className="text-yellow-800">For <strong>public holidays</strong>, please inform the admin <strong>2–3 days in advance</strong> before making a booking.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border p-6 space-y-5" style={{ borderColor: "#ffe8d0" }}>
@@ -246,12 +327,17 @@ export default function BookingPage() {
               required
               min={TODAY}
               value={form.date}
-              onChange={(e) => set("date", e.target.value)}
+              onChange={(e) => { set("date", e.target.value); set("pickupTime", ""); set("endTime", ""); }}
               className={inputClass}
             />
+            {dateError && (
+              <p className="text-red-600 text-xs mt-1.5 flex items-center gap-1">
+                <span>⚠️</span> {dateError}
+              </p>
+            )}
           </div>
 
-          {/* Type */}
+          {/* Trip Type */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Trip Type <span style={{ color: "#ff6900" }}>*</span></label>
             <div className="grid grid-cols-2 gap-3">
@@ -273,8 +359,8 @@ export default function BookingPage() {
             </div>
             <p className="text-xs text-gray-400 mt-1.5">
               {form.type === "drop_off"
-                ? "One-way trip. Driver drops guests off and returns."
-                : "Driver drops off and picks guests up again to return to office."}
+                ? "Driver drops guests off — slot blocked for 1 hour."
+                : "Driver drops off and picks up. Slot blocked for full duration."}
             </p>
           </div>
 
@@ -302,18 +388,35 @@ export default function BookingPage() {
 
           {/* Pick-up Time */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Pick-up Time <span style={{ color: "#ff6900" }}>*</span></label>
-            <select
-              required
-              value={form.pickupTime}
-              onChange={(e) => { set("pickupTime", e.target.value); set("endTime", ""); }}
-              className={inputClass}
-            >
-              <option value="">Select time</option>
-              {ALL_SLOTS.map((s) => (
-                <option key={s} value={s}>{fmt12(s)}</option>
-              ))}
-            </select>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Pick-up Time <span style={{ color: "#ff6900" }}>*</span>
+            </label>
+            {!dateError ? (
+              <>
+                <select
+                  required
+                  value={form.pickupTime}
+                  onChange={(e) => { set("pickupTime", e.target.value); set("endTime", ""); }}
+                  className={inputClass}
+                >
+                  <option value="">Select time</option>
+                  {availablePickupSlots.length === 0 ? (
+                    <option disabled>No slots available for this date</option>
+                  ) : (
+                    availablePickupSlots.map((s) => (
+                      <option key={s} value={s}>{fmt12(s)}</option>
+                    ))
+                  )}
+                </select>
+                {availablePickupSlots.length === 0 && (
+                  <p className="text-red-500 text-xs mt-1">All slots are booked for this date.</p>
+                )}
+              </>
+            ) : (
+              <select disabled className={inputClass + " opacity-50 cursor-not-allowed"}>
+                <option>Select a valid date first</option>
+              </select>
+            )}
           </div>
 
           {/* End Time (round trip only) */}
@@ -331,14 +434,17 @@ export default function BookingPage() {
                 className={inputClass + " disabled:bg-gray-50 disabled:text-gray-400"}
               >
                 <option value="">Select return time</option>
-                {endTimeSlots.map((s) => (
+                {availableEndSlots.map((s) => (
                   <option key={s} value={s}>{fmt12(s)}</option>
                 ))}
               </select>
+              {form.pickupTime && availableEndSlots.length === 0 && (
+                <p className="text-red-500 text-xs mt-1">No return slots available after selected pick-up time.</p>
+              )}
             </div>
           )}
 
-          {/* Availability */}
+          {/* Availability indicator */}
           {checking && (
             <div className="text-sm text-gray-500 flex items-center gap-2">
               <div className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: "#ff6900", borderTopColor: "transparent" }} />
@@ -369,9 +475,9 @@ export default function BookingPage() {
 
           <button
             type="submit"
-            disabled={submitting || (!!availabilityMsg && !availabilityMsg.ok)}
+            disabled={submitting || !!dateError || (!!availabilityMsg && !availabilityMsg.ok)}
             className="w-full text-white font-semibold py-3 rounded-xl transition-all text-sm disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ background: submitting || (!!availabilityMsg && !availabilityMsg.ok) ? "#ccc" : "#ff6900" }}
+            style={{ background: "#ff6900" }}
           >
             {submitting ? "Submitting…" : "Confirm Booking"}
           </button>

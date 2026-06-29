@@ -1,118 +1,3 @@
-// import { kv } from "@vercel/kv";
-// import { promises as fs } from "fs";
-// import path from "path";
-
-// export interface Booking {
-//   id: string;
-//   date: string;
-//   type: "drop_off" | "round_trip";
-//   picName: string;
-//   picContact: string;
-//   totalGuests: number;
-//   pickupTime: string;
-//   endTime?: string;
-//   pickupPoint: string;
-//   dropOffPoint: string;
-//   createdAt: string;
-// }
-
-// const KEY = "bookings";
-// const DATA_FILE = path.join(process.cwd(), "data", "bookings.json");
-
-// export class StorageNotConfiguredError extends Error {
-//   constructor() {
-//     super(
-//       "Booking storage is not set up. In Vercel: Project → Storage → Create KV Database → Connect to this project → Redeploy."
-//     );
-//     this.name = "StorageNotConfiguredError";
-//   }
-// }
-
-// function hasKvConfig(): boolean {
-//   return Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
-// }
-
-// function isVercel(): boolean {
-//   return Boolean(process.env.VERCEL);
-// }
-
-// async function readFromFile(): Promise<Booking[]> {
-//   try {
-//     const raw = await fs.readFile(DATA_FILE, "utf-8");
-//     return JSON.parse(raw) as Booking[];
-//   } catch {
-//     return [];
-//   }
-// }
-
-// async function writeToFile(bookings: Booking[]): Promise<void> {
-//   await fs.mkdir(path.dirname(DATA_FILE), { recursive: true });
-//   await fs.writeFile(DATA_FILE, JSON.stringify(bookings, null, 2));
-// }
-
-// export async function readBookings(): Promise<Booking[]> {
-//   if (hasKvConfig()) {
-//     const data = await kv.get<Booking[]>(KEY);
-//     return data ?? [];
-//   }
-
-//   if (isVercel()) {
-//     throw new StorageNotConfiguredError();
-//   }
-
-//   return readFromFile();
-// }
-
-// export async function writeBookings(bookings: Booking[]): Promise<void> {
-//   if (hasKvConfig()) {
-//     await kv.set(KEY, bookings);
-//     return;
-//   }
-
-//   if (isVercel()) {
-//     throw new StorageNotConfiguredError();
-//   }
-
-//   await writeToFile(bookings);
-// }
-
-// function toMinutes(t: string): number {
-//   const [h, m] = t.split(":").map(Number);
-//   return h * 60 + m;
-// }
-
-// export function hasClash(
-//   date: string,
-//   pickupTime: string,
-//   endTime: string | undefined,
-//   type: "drop_off" | "round_trip",
-//   existingBookings: Booking[]
-// ): { clashes: boolean; clashWith?: Booking } {
-//   const proposed = {
-//     start: toMinutes(pickupTime),
-//     end:
-//       type === "round_trip" && endTime
-//         ? toMinutes(endTime)
-//         : toMinutes(pickupTime) + 60,
-//   };
-
-//   const same = existingBookings.filter((b) => b.date === date);
-
-//   for (const b of same) {
-//     const existing = {
-//       start: toMinutes(b.pickupTime),
-//       end:
-//         b.type === "round_trip" && b.endTime
-//           ? toMinutes(b.endTime)
-//           : toMinutes(b.pickupTime) + 60,
-//     };
-//     if (proposed.start < existing.end && existing.start < proposed.end) {
-//       return { clashes: true, clashWith: b };
-//     }
-//   }
-//   return { clashes: false };
-// }
-
 import Redis from "ioredis";
 import { promises as fs } from "fs";
 import path from "path";
@@ -124,8 +9,8 @@ export interface Booking {
   picName: string;
   picContact: string;
   totalGuests: number;
-  pickupTime: string;
-  endTime?: string;
+  pickupTime: string; // HH:MM 24h
+  endTime?: string;   // HH:MM 24h, round trip only
   pickupPoint: string;
   dropOffPoint: string;
   createdAt: string;
@@ -134,19 +19,15 @@ export interface Booking {
 const KEY = "bookings";
 const DATA_FILE = path.join(process.cwd(), "data", "bookings.json");
 
-// Initialize Redis client using REDIS_URL
 let redis: Redis | null = null;
 
 function initializeRedis() {
   if (redis) return redis;
-
   try {
-    // Using REDIS_URL (standard Redis connection string)
     if (process.env.REDIS_URL) {
       redis = new Redis(process.env.REDIS_URL);
       return redis;
     }
-
     return null;
   } catch (error) {
     console.error("Failed to initialize Redis:", error);
@@ -156,9 +37,7 @@ function initializeRedis() {
 
 export class StorageNotConfiguredError extends Error {
   constructor() {
-    super(
-      "Booking storage is not set up. Set REDIS_URL environment variable."
-    );
+    super("Booking storage is not set up. Set REDIS_URL environment variable.");
     this.name = "StorageNotConfiguredError";
   }
 }
@@ -195,15 +74,10 @@ export async function readBookings(): Promise<Booking[]> {
       }
     } catch (error) {
       console.error("Redis read error:", error);
-      // Fallback to file if Redis fails
       return readFromFile();
     }
   }
-
-  if (isVercel()) {
-    throw new StorageNotConfiguredError();
-  }
-
+  if (isVercel()) throw new StorageNotConfiguredError();
   return readFromFile();
 }
 
@@ -217,24 +91,47 @@ export async function writeBookings(bookings: Booking[]): Promise<void> {
       }
     } catch (error) {
       console.error("Redis write error:", error);
-      // Fallback to file if Redis fails
       await writeToFile(bookings);
       return;
     }
   }
-
-  if (isVercel()) {
-    throw new StorageNotConfiguredError();
-  }
-
+  if (isVercel()) throw new StorageNotConfiguredError();
   await writeToFile(bookings);
 }
 
-function toMinutes(t: string): number {
+/** Convert "HH:MM" to minutes since midnight */
+export function toMinutes(t: string): number {
   const [h, m] = t.split(":").map(Number);
   return h * 60 + m;
 }
 
+/**
+ * Get the effective blocked range for a booking.
+ * Drop off: pickupTime to pickupTime + 60min
+ * Round trip: pickupTime to endTime
+ */
+export function getBlockedRange(b: Booking): { start: number; end: number } {
+  const start = toMinutes(b.pickupTime);
+  const end =
+    b.type === "round_trip" && b.endTime
+      ? toMinutes(b.endTime)
+      : start + 60;
+  return { start, end };
+}
+
+/**
+ * Returns all booked time ranges for a given date as [start, end] minute pairs.
+ * Used by the frontend to filter out unavailable slots.
+ */
+export function getBookedRanges(date: string, bookings: Booking[]): { start: number; end: number }[] {
+  return bookings
+    .filter((b) => b.date === date)
+    .map(getBlockedRange);
+}
+
+/**
+ * Check if a proposed booking clashes with any existing one.
+ */
 export function hasClash(
   date: string,
   pickupTime: string,
@@ -253,18 +150,40 @@ export function hasClash(
   const same = existingBookings.filter((b) => b.date === date);
 
   for (const b of same) {
-    const existing = {
-      start: toMinutes(b.pickupTime),
-      end:
-        b.type === "round_trip" && b.endTime
-          ? toMinutes(b.endTime)
-          : toMinutes(b.pickupTime) + 60,
-    };
-
+    const existing = getBlockedRange(b);
     if (proposed.start < existing.end && existing.start < proposed.end) {
       return { clashes: true, clashWith: b };
     }
   }
-
   return { clashes: false };
+}
+
+// ── Office hours & holiday helpers ──────────────────────────────────────────
+
+/** Returns true if date is a weekday (Mon–Fri) */
+export function isWeekday(dateStr: string): boolean {
+  const d = new Date(dateStr + "T00:00:00");
+  const day = d.getDay(); // 0=Sun, 6=Sat
+  return day >= 1 && day <= 5;
+}
+
+/**
+ * Returns the minimum bookable time for a given date.
+ * - Future dates: "09:00"
+ * - Today: current time rounded up to next 30-min slot, minimum "09:00"
+ */
+export function getMinPickupTime(dateStr: string): string {
+  const todayStr = new Date().toISOString().split("T")[0];
+  if (dateStr !== todayStr) return "09:00";
+
+  const now = new Date();
+  const totalMinutes = now.getHours() * 60 + now.getMinutes();
+  // Round up to next 30-min slot
+  const next30 = Math.ceil(totalMinutes / 30) * 30;
+  const h = Math.floor(next30 / 60).toString().padStart(2, "0");
+  const m = (next30 % 60).toString().padStart(2, "0");
+  const slot = `${h}:${m}`;
+  // Must be at least 09:00 and no later than 18:00
+  if (slot < "09:00") return "09:00";
+  return slot;
 }

@@ -50,8 +50,8 @@ export default function TimeSlotPicker({
     const isBooked = bookedRanges.some((r) => slotMin >= r.start && slotMin < r.end);
     if (isBooked) return "booked";
 
-    // Is it past the min allowed time?
-    if (slot < minTime) return "past";
+    // Is it before the min allowed time? (past for today, always 09:00 for future)
+    if (slotMin < toMinutes(minTime)) return "past";
 
     // Is it the selected pickup?
     if (pickupTime && slot === pickupTime) return "selected_pickup";

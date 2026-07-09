@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import DatePicker from "./components/DatePicker";
+import TimeSlotPicker from "./components/TimeSlotPicker";
 
 const DRIVER_START = "09:00";
 const DRIVER_END = "18:00";
@@ -48,16 +49,6 @@ function getMinPickupTime(dateStr: string): string {
   return slot;
 }
 
-/** Returns true if a proposed slot [start, start+duration) overlaps any booked range */
-function isSlotBlocked(
-  slotTime: string,
-  bookedRanges: { start: number; end: number }[],
-  slotDurationMin = 30
-): boolean {
-  const slotStart = toMinutes(slotTime);
-  const slotEnd = slotStart + slotDurationMin;
-  return bookedRanges.some((r) => slotStart < r.end && r.start < slotEnd);
-}
 
 const ALL_SLOTS = generateTimeSlots(DRIVER_START, DRIVER_END, 30);
 const TODAY = new Date().toISOString().split("T")[0];
@@ -115,27 +106,6 @@ export default function BookingPage() {
 
 
   const minPickupTime = getMinPickupTime(form.date);
-
-  // Available pickup slots: exclude past times + booked ranges
-  const availablePickupSlots = ALL_SLOTS.filter((s) => {
-    if (s < minPickupTime) return false;
-    if (isSlotBlocked(s, bookedRanges, 30)) return false;
-    return true;
-  });
-
-  // Available end time slots: must be after pickup, exclude booked ranges
-  const availableEndSlots = form.pickupTime
-    ? ALL_SLOTS.filter((s) => {
-        if (s <= form.pickupTime) return false;
-        // For end time, we check if ANY slot between pickup and this end time is blocked
-        const pickupMin = toMinutes(form.pickupTime);
-        const endMin = toMinutes(s);
-        const blocked = bookedRanges.some(
-          (r) => pickupMin < r.end && r.start < endMin
-        );
-        return !blocked;
-      })
-    : [];
 
   function set(field: keyof FormState, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -385,54 +355,25 @@ export default function BookingPage() {
 
           <div className="border-t" style={{ borderColor: "#fff0e0" }} />
 
-          {/* Pick-up Time */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Pick-up Time <span style={{ color: "#ff6900" }}>*</span>
-            </label>
-            <select
-              required
-              value={form.pickupTime}
-              onChange={(e) => { set("pickupTime", e.target.value); set("endTime", ""); }}
-              className={inputClass}
-              disabled={!form.date}
-            >
-              <option value="">Select time</option>
-              {availablePickupSlots.length === 0 ? (
-                <option disabled>No slots available for this date</option>
-              ) : (
-                availablePickupSlots.map((s) => (
-                  <option key={s} value={s}>{fmt12(s)}</option>
-                ))
-              )}
-            </select>
-            {form.date && availablePickupSlots.length === 0 && (
-              <p className="text-red-500 text-xs mt-1">All slots are booked for this date.</p>
-            )}
-          </div>
-
-          {/* End Time (round trip only) */}
-          {form.type === "round_trip" && (
+          {/* Time Slot Picker */}
+          {form.date && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Return to Office Time <span style={{ color: "#ff6900" }}>*</span>
-                <span className="text-gray-400 font-normal ml-1">(pick-up time to head back)</span>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                {form.type === "drop_off"
+                  ? <>Pick-up Time <span style={{ color: "#ff6900" }}>*</span></>
+                  : <>Pick-up & Return Time <span style={{ color: "#ff6900" }}>*</span></>
+                }
               </label>
-              <select
-                required
-                value={form.endTime}
-                onChange={(e) => set("endTime", e.target.value)}
-                disabled={!form.pickupTime}
-                className={inputClass + " disabled:bg-gray-50 disabled:text-gray-400"}
-              >
-                <option value="">Select return time</option>
-                {availableEndSlots.map((s) => (
-                  <option key={s} value={s}>{fmt12(s)}</option>
-                ))}
-              </select>
-              {form.pickupTime && availableEndSlots.length === 0 && (
-                <p className="text-red-500 text-xs mt-1">No return slots available after selected pick-up time.</p>
-              )}
+              <TimeSlotPicker
+                slots={ALL_SLOTS}
+                bookedRanges={bookedRanges}
+                minTime={minPickupTime}
+                pickupTime={form.pickupTime}
+                endTime={form.endTime}
+                tripType={form.type}
+                onPickupSelect={(t) => { set("pickupTime", t); if (!t) set("endTime", ""); setAvailabilityMsg(null); }}
+                onEndSelect={(t) => { set("endTime", t); setAvailabilityMsg(null); }}
+              />
             </div>
           )}
 

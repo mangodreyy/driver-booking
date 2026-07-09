@@ -123,7 +123,7 @@ export default function TimeSlotPicker({
       case "booked":
         return { ...base, background: "#fee2e2", color: "#ef4444", border: "1px solid #fca5a5" };
       case "past":
-        return { ...base, background: "#f9fafb", color: "#d1d5db", border: "1px solid #f3f4f6" };
+        return { ...base, background: "#f3f4f6", color: "#c0c4cc", border: "1px solid #e5e7eb" };
       case "selected_pickup":
         return { ...base, background: "#ff6900", color: "white", border: "1px solid #ff6900" };
       case "selected_end":
@@ -131,7 +131,7 @@ export default function TimeSlotPicker({
       case "selected_range":
         return { ...base, background: "#fff0e0", color: "#ff6900", border: "1px solid #ffcb99" };
       case "available":
-        return { ...base, background: "white", color: "#374151", border: "1px solid #e5e7eb" };
+        return { ...base, background: "#dcfce7", color: "#15803d", border: "1px solid #86efac" };
     }
   }
 
@@ -188,9 +188,9 @@ export default function TimeSlotPicker({
       )}
 
       {/* Slot grid */}
-      <div className="rounded-xl border p-3 space-y-2" style={{ borderColor: "#ffe0c0", background: "#fffaf7" }}>
+      <div className="rounded-xl border p-2 space-y-1" style={{ borderColor: "#ffe0c0", background: "#fffaf7" }}>
         {hours.map(({ hour: _, slots: hourSlots }) => (
-          <div key={_} className="flex gap-1.5">
+          <div key={_} className="flex gap-1">
             {hourSlots.map((slot) => {
                 const status = getStatus(slot);
                 const isHalf = slot.endsWith(":30");
@@ -199,7 +199,7 @@ export default function TimeSlotPicker({
                     key={slot}
                     onClick={() => handleSlotClick(slot)}
                     style={getStyle(status, isHalf)}
-                    className="flex-1 text-center py-1.5 select-none"
+                    className="flex-1 text-center py-1 select-none text-xs"
                     title={
                       status === "booked" ? "Already booked" :
                       status === "past" ? "Past / unavailable" :
@@ -214,18 +214,18 @@ export default function TimeSlotPicker({
           ))}
 
         {/* Legend */}
-        <div className="flex items-center gap-4 pt-2 mt-1 border-t flex-wrap" style={{ borderColor: "#ffe0c0" }}>
+        <div className="flex items-center gap-3 pt-2 mt-1 border-t flex-wrap" style={{ borderColor: "#ffe0c0" }}>
+          <div className="flex items-center gap-1.5 text-xs text-gray-400">
+            <div className="w-3 h-3 rounded" style={{ background: "#dcfce7", border: "1px solid #86efac" }} />
+            Available
+          </div>
           <div className="flex items-center gap-1.5 text-xs text-gray-400">
             <div className="w-3 h-3 rounded" style={{ background: "#fee2e2", border: "1px solid #fca5a5" }} />
             Booked
           </div>
           <div className="flex items-center gap-1.5 text-xs text-gray-400">
-            <div className="w-3 h-3 rounded" style={{ background: "#f9fafb", border: "1px solid #f3f4f6" }} />
-            Unavailable
-          </div>
-          <div className="flex items-center gap-1.5 text-xs text-gray-400">
-            <div className="w-3 h-3 rounded" style={{ background: "#fff0e0", border: "1px solid #ffcb99" }} />
-            Your block
+            <div className="w-3 h-3 rounded" style={{ background: "#f3f4f6", border: "1px solid #e5e7eb" }} />
+            Past
           </div>
           <div className="flex items-center gap-1.5 text-xs text-gray-400">
             <div className="w-3 h-3 rounded" style={{ background: "#ff6900" }} />

@@ -237,7 +237,7 @@ export default function BookingPage() {
   // ── Main form ────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen py-10 px-4" style={{ background: "#fff7f0" }}>
-      <div className="max-w-xl mx-auto">
+      <div className="max-w-3xl mx-auto">
 
         {/* Header */}
         <div className="mb-6">
@@ -272,14 +272,37 @@ export default function BookingPage() {
 
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border p-6 space-y-5" style={{ borderColor: "#ffe8d0" }}>
 
-          {/* Date */}
+          {/* Date + Time Slot side by side */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Date <span style={{ color: "#ff6900" }}>*</span></label>
-            <DatePicker
-              value={form.date}
-              min={TODAY}
-              onChange={(d) => { set("date", d); set("pickupTime", ""); set("endTime", ""); }}
-            />
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Date & {form.type === "drop_off" ? "Pick-up Time" : "Pick-up & Return Time"} <span style={{ color: "#ff6900" }}>*</span>
+            </label>
+            <div className="flex gap-3 items-start">
+              {/* Calendar */}
+              <div className="flex-shrink-0 w-64">
+                <DatePicker
+                  value={form.date}
+                  min={TODAY}
+                  onChange={(d) => { set("date", d); set("pickupTime", ""); set("endTime", ""); }}
+                />
+              </div>
+
+              {/* Time slots */}
+              {form.date && (
+                <div className="flex-1 min-w-0">
+                  <TimeSlotPicker
+                    slots={ALL_SLOTS}
+                    bookedRanges={bookedRanges}
+                    minTime={minPickupTime}
+                    pickupTime={form.pickupTime}
+                    endTime={form.endTime}
+                    tripType={form.type}
+                    onPickupSelect={(t) => { set("pickupTime", t); if (!t) set("endTime", ""); setAvailabilityMsg(null); }}
+                    onEndSelect={(t) => { set("endTime", t); setAvailabilityMsg(null); }}
+                  />
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Trip Type */}
@@ -329,29 +352,7 @@ export default function BookingPage() {
             <input type="number" required min={1} placeholder="e.g. 4" value={form.totalGuests} onChange={(e) => set("totalGuests", e.target.value)} className={inputClass} />
           </div>
 
-          <div className="border-t" style={{ borderColor: "#fff0e0" }} />
 
-          {/* Time Slot Picker */}
-          {form.date && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                {form.type === "drop_off"
-                  ? <>Pick-up Time <span style={{ color: "#ff6900" }}>*</span></>
-                  : <>Pick-up & Return Time <span style={{ color: "#ff6900" }}>*</span></>
-                }
-              </label>
-              <TimeSlotPicker
-                slots={ALL_SLOTS}
-                bookedRanges={bookedRanges}
-                minTime={minPickupTime}
-                pickupTime={form.pickupTime}
-                endTime={form.endTime}
-                tripType={form.type}
-                onPickupSelect={(t) => { set("pickupTime", t); if (!t) set("endTime", ""); setAvailabilityMsg(null); }}
-                onEndSelect={(t) => { set("endTime", t); setAvailabilityMsg(null); }}
-              />
-            </div>
-          )}
 
           {/* Availability indicator */}
           {checking && (

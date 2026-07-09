@@ -173,7 +173,7 @@ export default function TimeSlotPicker({
           <span style={{ color: "#ff6900" }}>🕐</span>
           <span className="text-gray-700">
             {tripType === "drop_off"
-              ? <><strong>Pick-up:</strong> {fmt12(pickupTime)} <span className="text-gray-400">(driver back ~{fmt12(`${String(Math.floor((toMinutes(pickupTime) + 60) / 60)).padStart(2,"0")}:${String((toMinutes(pickupTime) + 60) % 60).padStart(2,"0")}`)})</span></>
+              ? <><strong>Pick-up:</strong> {fmt12(pickupTime)} <span className="text-gray-400">(driver will return to office once drop off)</span></>
               : hasEnd
               ? <><strong>Pick-up:</strong> {fmt12(pickupTime)} &nbsp;→&nbsp; <strong>Return:</strong> {fmt12(endTime)}</>
               : <><strong>Pick-up:</strong> {fmt12(pickupTime)} &nbsp;→&nbsp; <span className="text-gray-400">select return time</span></>
@@ -189,11 +189,9 @@ export default function TimeSlotPicker({
 
       {/* Slot grid */}
       <div className="rounded-xl border p-3 space-y-2" style={{ borderColor: "#ffe0c0", background: "#fffaf7" }}>
-        {hours.map(({ hour, slots: hourSlots }) => (
-          <div key={hour} className="flex items-center gap-2">
-            <span className="text-xs text-gray-400 w-12 flex-shrink-0 text-right">{hour}</span>
-            <div className="flex gap-1.5 flex-1">
-              {hourSlots.map((slot) => {
+        {hours.map(({ hour: _, slots: hourSlots }) => (
+          <div key={_} className="flex gap-1.5">
+            {hourSlots.map((slot) => {
                 const status = getStatus(slot);
                 const isHalf = slot.endsWith(":30");
                 return (
@@ -208,13 +206,12 @@ export default function TimeSlotPicker({
                       fmt12(slot)
                     }
                   >
-                    {isHalf ? ":30" : ":00"}
+                    {fmt12(slot)}
                   </div>
                 );
               })}
             </div>
-          </div>
-        ))}
+          ))}
 
         {/* Legend */}
         <div className="flex items-center gap-4 pt-2 mt-1 border-t flex-wrap" style={{ borderColor: "#ffe0c0" }}>

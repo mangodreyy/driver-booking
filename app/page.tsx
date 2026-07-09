@@ -37,11 +37,15 @@ function generateTimeSlots(start: string, end: string, intervalMin = 30): string
 }
 
 function getMinPickupTime(dateStr: string): string {
-  const todayStr = new Date().toISOString().split("T")[0];
-  if (dateStr !== todayStr) return "09:00";
+  // Use Malaysia time (UTC+8)
   const now = new Date();
-  const totalMinutes = now.getHours() * 60 + now.getMinutes();
-  const next30 = Math.ceil(totalMinutes / 30) * 30;
+  const myt = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+  const todayStr = myt.toISOString().split("T")[0];
+
+  if (dateStr !== todayStr) return "09:00";
+
+  const totalMinutes = myt.getUTCHours() * 60 + myt.getUTCMinutes();
+  const next30 = Math.ceil((totalMinutes + 1) / 30) * 30; // +1 to avoid booking current slot
   const h = Math.floor(next30 / 60).toString().padStart(2, "0");
   const m = (next30 % 60).toString().padStart(2, "0");
   const slot = `${h}:${m}`;
@@ -51,7 +55,9 @@ function getMinPickupTime(dateStr: string): string {
 
 
 const ALL_SLOTS = generateTimeSlots(DRIVER_START, DRIVER_END, 30);
-const TODAY = new Date().toISOString().split("T")[0];
+// Malaysia time (UTC+8)
+const NOW_MYT = new Date(Date.now() + 8 * 60 * 60 * 1000);
+const TODAY = NOW_MYT.toISOString().split("T")[0];
 
 type BookingType = "drop_off" | "round_trip";
 

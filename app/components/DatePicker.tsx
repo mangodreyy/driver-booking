@@ -16,10 +16,11 @@ function toYMD(y: number, m: number, d: number): string {
 }
 
 export default function DatePicker({ value, onChange, min }: DatePickerProps) {
-  const today = new Date();
-  const todayStr = toYMD(today.getFullYear(), today.getMonth(), today.getDate());
-  const [viewYear, setViewYear] = useState(today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(today.getMonth());
+  // Malaysia time (UTC+8)
+  const today = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  const todayStr = today.toISOString().split("T")[0];
+  const [viewYear, setViewYear] = useState(today.getUTCFullYear());
+  const [viewMonth, setViewMonth] = useState(today.getUTCMonth());
 
   const minDate = min || todayStr;
 
@@ -55,7 +56,6 @@ export default function DatePicker({ value, onChange, min }: DatePickerProps) {
     const isPast = dateStr < minDate;
     const isSelected = dateStr === value;
     const isToday = dateStr === todayStr;
-
     if (isSelected) return { background: "#ff6900", color: "white", borderRadius: "8px", cursor: "pointer", fontWeight: 600 };
     if (isWeekend || isPast) return { color: "#d1d5db", cursor: "not-allowed" };
     if (isToday) return { background: "#fff0e0", color: "#ff6900", borderRadius: "8px", cursor: "pointer", fontWeight: 600 };

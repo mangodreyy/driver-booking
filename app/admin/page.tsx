@@ -55,7 +55,18 @@ export default function AdminPage() {
             </div>
             <p className="text-gray-400 text-sm">{bookings.length} total booking{bookings.length !== 1 ? "s" : ""}</p>
           </div>
-          <a href="/" className="text-sm font-medium px-3 py-1.5 rounded-lg" style={{ color: "#ff6900", background: "#fff0e0" }}>← New Booking</a>
+          <div className="flex items-center gap-3">
+            <a href="/" className="text-sm font-medium px-3 py-1.5 rounded-lg" style={{ color: "#ff6900", background: "#fff0e0" }}>← New Booking</a>
+            <button
+              onClick={async () => {
+                await fetch("/api/admin/login", { method: "DELETE" });
+                window.location.href = "/admin/login";
+              }}
+              className="text-sm font-medium px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"
+            >
+              Sign Out
+            </button>
+          </div>
         </div>
 
         <div className="bg-white rounded-xl border p-4 mb-4 flex items-center gap-3" style={{ borderColor: "#ffe0c0" }}>
